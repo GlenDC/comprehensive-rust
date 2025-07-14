@@ -8,7 +8,7 @@ RAII (*Resource Acquisition Is Initialization*)
 means tying the lifetime of a resource to the lifetime of a value.
 
 Rust applies RAII automatically for memory management.
-The [Drop] trait lets you extend this pattern to resources outside
+The `Drop` trait lets you extend this pattern to resources outside
 Rust’s ownership system, such as files, sockets, or locks.
 
 ```rust

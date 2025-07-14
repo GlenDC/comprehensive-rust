@@ -444,7 +444,7 @@
   - [RAII](idiomatic/leveraging-the-type-system/raii.md)
     - [Scope Guards](idiomatic/leveraging-the-type-system/raii/scope_guards.md)
     - [Drop Bombs](idiomatic/leveraging-the-type-system/raii/drop_bombs.md)
-
+  - [Typestate Pattern](idiomatic/leveraging-the-type-system/typestate-pattern.md)
 ---
 
 # Final Words
