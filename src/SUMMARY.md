@@ -441,6 +441,9 @@
     - [Extending Foreign Types](idiomatic/leveraging-the-type-system/extension-traits/extending-foreign-types.md)
     - [Method Resolution Conflicts](idiomatic/leveraging-the-type-system/extension-traits/method-resolution-conflicts.md)
     - [Extending Foreign Traits](idiomatic/leveraging-the-type-system/extension-traits/extending-foreign-traits.md)
+  - [RAII](idiomatic/leveraging-the-type-system/raii.md)
+    - [Scope Guards](idiomatic/leveraging-the-type-system/raii/scope_guards.md)
+    - [Drop Bombs](idiomatic/leveraging-the-type-system/raii/drop_bombs.md)
 
 ---
 
