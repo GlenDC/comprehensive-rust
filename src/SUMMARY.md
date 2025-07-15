@@ -443,7 +443,7 @@
     - [Extending Foreign Traits](idiomatic/leveraging-the-type-system/extension-traits/extending-foreign-traits.md)
   - [RAII](idiomatic/leveraging-the-type-system/raii.md)
     - [Drop Limitations](idiomatic/leveraging-the-type-system/raii/drop_limitations.md)
-    - [Drop Bombs](idiomatic/leveraging-the-type-system/raii/drop_bombs.md)
+    - [Drop Bomb](idiomatic/leveraging-the-type-system/raii/drop_bomb.md)
     - [Scope Guards](idiomatic/leveraging-the-type-system/raii/scope_guards.md)
   - [Typestate Pattern](idiomatic/leveraging-the-type-system/typestate-pattern.md)
 ---

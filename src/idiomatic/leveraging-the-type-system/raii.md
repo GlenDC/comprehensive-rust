@@ -1,5 +1,5 @@
 ---
-minutes: 20
+minutes: 30
 ---
 
 # RAII and `Drop` in Practice

@@ -1,57 +1,130 @@
-# Scope Guards with `Mutex`
+# Scope Guards
 
-In Rust, critical sections are automatically released via scope guards.
+A scope guard makes use of the `Drop` trait
+to run a given closure when it goes out of scope.
 
 ```rust
-use std::sync::Mutex;
+use std::{io::Write, fs::{self, File}};
+use scopeguard::{guard, ScopeGuard};
+
+fn conditional_success() -> bool { true }
 
 fn main() {
-    let mux = Mutex::new(vec![1, 2, 3]);
+    let path = "temp.txt";
+    let mut file = File::create(path).expect("cannot create file");
 
-    {
-        let mut data = mux.lock().unwrap();
-        data.push(4); // lock held here
-    } // lock automatically released here
+    // Write something to the file
+    writeln!(file, "temporary data").unwrap();
+
+    // Create a scope guard to clean up the file unless we defuse it
+    let cleanup = guard(path, |path| {
+        // Errors must be handled inside the guard,
+        // but cannot be propagated.
+        let _ = fs::remove_file(path);
+    });
+
+    if conditional_success() {
+        // Success path: we want to keep the file
+        let path = ScopeGuard::into_inner(cleanup);
+    } else {
+        // Otherwise, the guard remains active and deletes the file on scope exit
+    }
 }
 ```
 
 <details>
 
-- [The `Mutex`](https://doc.rust-lang.org/std/sync/struct.Mutex.html)
-  owns its data: you can’t access the value inside without first acquiring the lock.
+- This example demonstrates the use of
+  [the `scopeguard` crate](https://docs.rs/scopeguard/latest/scopeguard/),
+  which is commonly used in internal APIs to ensure that a closure runs
+  when a scope exits.
 
-- `mux.lock()` returns a
-  [`MutexGuard`](https://doc.rust-lang.org/std/sync/struct.MutexGuard.html),
-  which [dereferences](https://doc.rust-lang.org/std/ops/trait.DerefMut.html)
-  to the data and implements [`Drop`](https://doc.rust-lang.org/std/ops/trait.Drop.html).
+  - If the cleanup logic in the example above were unconditional,
+    the code could be simplified using
+    [scopeguard's `defer!` macro](https://docs.rs/scopeguard/latest/scopeguard/#defer):
 
-- When the guard goes out of scope,
-  [`Drop::drop`](https://doc.rust-lang.org/std/ops/trait.Drop.html#tymethod.drop)
-  runs and unlocks the mutex. This is a scope guard.
+    ```rust
+    let path = "temp.txt";
 
-- Compare with C++ or Java: often you must manually unlock
-  or use a separate `lock/unlock` pattern.
+    scopeguard::defer! {
+         let _ = std::fs::remove_file(path);
+    }
+    ```
 
-- In Rust, the compiler ensures the lock *cannot* be forgotten.
-  There’s no way to bypass the guard unless you go into `unsafe`.
+- If desired, the "scope guard" pattern can be implemented manually,
+  starting as follows:
 
-- This applies not just to `Mutex`. `RwLock`, file locks,
-  and other owners of shared or external resources follow this pattern.
+  ```rust
+  struct ScopeGuard<T, F: FnOnce()> {
+      value: Option<T>,
+      drop_fn: Option<F>,
+  }
 
-- You *can* accidentally hold a lock too long
-  if you let the guard escape its intended scope, so be mindful of lifetimes.
+  impl<T, F: FnOnce()> ScopeGuard<T, F> {
+      fn guard(value: T, drop_fn: F) -> Self {
+          Self { value: Some(value), drop_fn: Some(drop_fn) }
+      }
 
-- For more advanced needs, see crates like
-  [`scopeguard`](https://docs.rs/scopeguard) for custom cleanup logic.
+      fn into_inner(mut self) -> T {
+          // The drop function is discarded and will not run
+          self.value.take().unwrap()
+      }
+  }
 
-  This crate allows you to easily write code similar to `defer` in languages such as Golang.
+  impl<T, F: FnOnce()> Drop for ScopeGuard<T, F> {
+      fn drop(&mut self) {
+          // Run the drop function when the guard goes out of scope.
+          // Note: if `into_inner` was called earlier, the drop function won't run.
+          if let Some(f) = self.drop_fn.take() {
+              f();
+          }
+      }
+  }
 
-- While Rust's ownership system prevents data races, you can still experience deadlocks.
+  impl<T, F: FnOnce()> std::ops::Deref for ScopeGuard<T, F> {
+      type Target = T;
 
-  This happens in case two threads are each waiting for the other to release a resource.
+      fn deref(&self) -> &T {
+          // Provide shared access to the underlying value
+          self.value.as_ref().unwrap()
+      }
+  }
 
-- Consider reading [*Rust Atomics and Locks* by Mara Bos](https://marabos.nl/atomics/)
-  to learn more about implementing synchronization primitives. The book demonstrates
-  how `Drop` and scope guards work together in practice.
+  impl<T, F: FnOnce()> std::ops::DerefMut for ScopeGuard<T, F> {
+      fn deref_mut(&mut self) -> &mut T {
+          // Provide exclusive access to the underlying value
+          self.value.as_mut().unwrap()
+      }
+  }
+  ```
+
+  - The `ScopeGuard` type in the `scopeguard` crate also includes
+    a `Debug` implementation and a third parameter:
+    a [`Strategy`](https://docs.rs/scopeguard/latest/scopeguard/trait.Strategy.html)
+    that determines when the `drop_fn` should run.
+
+    - By default, the strategy runs the drop function unconditionally.
+      However, the crate also provides built-in strategies to run the drop function
+      only during unwinding (due to a panic), or only on successful scope exit.
+
+      You can also implement your own `Strategy` trait
+      to define custom conditions for when the cleanup should occur.
+
+    - Remark also that the crates' `ScopeGuard` makes use of
+      [`ManuallyDrop`](https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html)
+      instead of `Option` to avoid automatic or premature dropping
+      of values, giving precise manual control and preventing
+      double-drops. This avoids the runtime overhead and semantic ambiguity that comes with using Option.
+
+- Recalling the transaction example from
+  [the drop bombs chapter](./drop_bomb.md),
+  we can now combine both concepts:
+  define a fallback that runs unless we explicitly abort early.
+  In the success path, we call `ScopeGuard::into_inner`
+  to prevent the rollback, as the transaction has already been committed.
+
+  While we still cannot propagate errors from fallible operations inside the drop logic,
+  this pattern at least allows us to orchestrate fallbacks explicitly
+  and with whatever guarantees or limits we require.
 
 </details>
